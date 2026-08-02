@@ -13,6 +13,28 @@ whose own element supplies the dim backdrop).
 It does **not** block ads. Keep using uBlock Origin / Brave Shields for that;
 this just cleans up the holes.
 
+## What it covers
+
+Surveyed by fetching each site and grepping the served markup, rather than from
+memory. The class names differ across the network, which is why the rule list
+isn't just `fandom-ad`:
+
+| Site | What its slots look like |
+|---|---|
+| **gamespot.com** | `fandom-ad`, `js-ad-wrap ad-wrap` |
+| **metacritic.com** | `fandom-ad-wrapper fandom-ad-placeholder min-h-[250px]` |
+| ***.fandom.com** wiki pages | `fandom-ad-placeholder fandom-ad-wrapper top-ads-container` |
+| **gamefaqs.gamespot.com** | `ad_wrap` (underscores), `js-mapped-ad ad ad_leader_plus_top` |
+| **comicvine.gamespot.com** | `ad-wrap ad-wrap-leader_bottom`, `mapped-ad` |
+
+`tvguide.com` and `fanatical.com` are Fandom properties too, but they inject
+their slots client-side and serve no ad markup to a plain fetch, so they're
+untested — the generic GPT rules should still apply. `giantbomb.com` went
+independent and may have left the network's ad stack entirely.
+
+Nothing here is limited to those hosts: the rules match on class and id, so any
+site using the same ad-engine markup is covered.
+
 ## Install
 
 1. Open `brave://extensions` (or `chrome://extensions`).
@@ -79,8 +101,9 @@ nothing was ever detached.
 
 ## Tuning the rules
 
-All selectors live in `src/rules.js` — one array, used for both the CSS and the
-DOM walk. Add a selector there and reload the extension.
+All selectors live in `src/rules.js`. `AD_SELECTORS` is the global list, used
+for both the injected CSS and the DOM walk. Add a selector there and reload the
+extension.
 
 `SITE_SELECTORS` in the same file is for clutter that is *not* an ad, so it
 must never go in the global list. Entries are keyed by domain (subdomains
@@ -97,6 +120,27 @@ content.
 If a page breaks, flip the site toggle off and open devtools to see which
 selector was too greedy.
 
+## Troubleshooting
+
+**Changed a file and nothing happened?** Reload the *extension*, not the page —
+`brave://extensions` → the ↻ arrow on the card. Chrome caches extension code
+until you do, so a page refresh alone keeps running the old build.
+
+**Still seeing an empty box?** Open the popup. It tells you which of two
+problems you have:
+
+- *"N slots hidden"* — the script is running and matching, so that particular
+  box is a selector gap. Right-click it → Inspect → Copy → Copy outerHTML, and
+  add a rule for it.
+- *"not running on this page"* or a count of 0 — the content script never
+  loaded or matched nothing at all. Check the card at `brave://extensions` for
+  errors.
+
+Note that with an ad blocker active the ad-engine script may never run, so the
+leftover markup can differ from what the site serves to an unblocked browser.
+Both cases are covered by the rules, but it's worth mentioning when reporting
+a box that survives.
+
 ## Tests
 
 ```
@@ -108,5 +152,6 @@ npm test
 GameSpot-shaped DOM and checks both directions: ad slots and their bare
 wrappers get hidden (including ones inserted late or classed late), while
 `header` / `loading` / `shadow` / `download` elements and article content are
-left alone. It also replays the Metacritic parse-order case and the verbatim
-markup of all five sites listed above. Run it after editing the selector list.
+left alone. It also replays the Metacritic parse-order case, the Blockthrough
+softwall, and the verbatim markup of all five sites in *What it covers*. Run it
+after editing the selector list.
