@@ -97,6 +97,48 @@ await new Promise((r) => setTimeout(r, 20));
 check('disabled site: style withdrawn', !dom2.window.document.querySelector('style'));
 check('disabled site: new slots untouched', !!dom2.window.document.querySelector('#after-disable'));
 
+// --- markup copied verbatim from the live sites (see README site list) -------
+const SAMPLES = {
+  'gamespot.com': '<div class="js-ad-wrap ad-wrap ad-wrap--top"><div class="fandom-ad" id="t"></div></div>',
+  'metacritic.com':
+    '<div class="fandom-ad-wrapper fandom-ad-placeholder min-w-[300px] min-h-[250px] fandom-ad-slot-type-display top-ads-container">' +
+    '<div class="fandom-ad-label ae-translatable-label">Advertisement</div></div>',
+  'fandom.com wiki':
+    '<div class="top_leaderboard-odyssey-wrapper fandom-ad-sticky-container sticky-placement-top fandom-ad-placeholder fandom-ad-slot-top_leaderboard"></div>',
+  'gamefaqs.gamespot.com': '<div class="ad_wrap "><div class="js-mapped-ad ad ad_leader_plus_top"></div></div>',
+  'comicvine.gamespot.com':
+    '<div class="ad-wrap ad-wrap-leader_bottom"><div class="js-mapped-ad mapped-ad mapped-leader_bottom"></div></div>',
+};
+
+for (const [site, markup] of Object.entries(SAMPLES)) {
+  const d = new JSDOM(`<!doctype html><body><main><p class="keep">text</p>${markup}</main></body>`, {
+    runScripts: 'outside-only',
+  });
+  d.window.chrome = {
+    storage: { local: { get: (defaults, cb) => cb(defaults) } },
+    runtime: { lastError: null, onMessage: { addListener: () => {} } },
+  };
+  d.window.eval(rules);
+  d.window.eval(content);
+  await new Promise((r) => setTimeout(r, 20));
+  const main = d.window.document.querySelector('main');
+  check(`real markup: ${site} slot removed`, main.children.length === 1);
+  check(`real markup: ${site} content kept`, !!d.window.document.querySelector('.keep'));
+}
+
+// "ad-settings" (Comic Vine) is a user-facing preferences control, not a slot
+const settings = new JSDOM('<!doctype html><body><div class="ad-settings">Ad settings</div>', {
+  runScripts: 'outside-only',
+});
+settings.window.chrome = {
+  storage: { local: { get: (defaults, cb) => cb(defaults) } },
+  runtime: { lastError: null, onMessage: { addListener: () => {} } },
+};
+settings.window.eval(rules);
+settings.window.eval(content);
+await new Promise((r) => setTimeout(r, 20));
+check('ad-settings control survives', !!settings.window.document.querySelector('.ad-settings'));
+
 let failed = 0;
 for (const [name, pass] of results) {
   if (!pass) failed++;

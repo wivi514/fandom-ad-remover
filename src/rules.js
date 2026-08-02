@@ -17,10 +17,13 @@ const AD_SELECTORS = [
   // --- Fandom / GameSpot / GiantBomb / Metacritic slot wrappers -------------
   '[class*="ad-wrap" i]',
   '[class*="adwrap" i]',
+  '[class*="ad_wrap" i]', // GameFAQs uses underscores throughout
   '[class*="ad-unit" i]',
   '[class*="adunit" i]',
+  '[class*="ad_unit" i]',
   '[class*="ad-slot" i]',
   '[class*="adslot" i]',
+  '[class*="ad_slot" i]',
   '[class*="ad-container" i]',
   '[class*="ad-placeholder" i]',
   '[class*="ad-label" i]',
