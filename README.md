@@ -78,6 +78,13 @@ nothing was ever detached.
 All selectors live in `src/rules.js` — one array, used for both the CSS and the
 DOM walk. Add a selector there and reload the extension.
 
+`SITE_SELECTORS` in the same file is for clutter that is *not* an ad, so it
+must never go in the global list. Entries are keyed by domain (subdomains
+included) and apply only there — for example `.c-section-about__overlay`, the
+decorative pink gradient panel on Metacritic's "Gold Standard" section. A
+global `[class*="overlay"]` rule would break half the web; a per-site one is
+safe.
+
 The one rule when adding entries: the selector must only ever match an element
 whose entire purpose is holding an ad. A bare `[class*="ad"]` is not safe — it
 matches `header`, `loading`, `shadow`, `download`, `thread`, and will eat real

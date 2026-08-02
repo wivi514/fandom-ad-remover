@@ -55,7 +55,31 @@ const AD_SELECTORS = [
   'ins.adsbygoogle',
 ];
 
-/** Injected at document_start so the box never gets a chance to paint. */
-const AD_CSS = AD_SELECTORS.join(',\n') + ' {\n  display: none !important;\n}\n';
+/**
+ * Per-site extras: clutter that is NOT an ad, and so must never join the list
+ * above — these selectors apply only on the hostname they are filed under.
+ * Keyed by registrable domain; subdomains are included.
+ */
+const SITE_SELECTORS = {
+  'metacritic.com': [
+    // Decorative pink radial-gradient panel laid over the "Gold Standard in
+    // Critical Analysis" section. position:absolute, so hiding it changes no
+    // layout — it just takes the glow away.
+    '.c-section-about__overlay',
+  ],
+};
 
-globalThis.FAR_RULES = { selectors: AD_SELECTORS, css: AD_CSS };
+/** Selectors for `host`, i.e. the global list plus any per-site extras. */
+function selectorsFor(host) {
+  const extras = Object.entries(SITE_SELECTORS)
+    .filter(([domain]) => host === domain || host.endsWith(`.${domain}`))
+    .flatMap(([, list]) => list);
+  return AD_SELECTORS.concat(extras);
+}
+
+/** Injected at document_start so the box never gets a chance to paint. */
+function cssFor(host) {
+  return selectorsFor(host).join(',\n') + ' {\n  display: none !important;\n}\n';
+}
+
+globalThis.FAR_RULES = { selectorsFor, cssFor };

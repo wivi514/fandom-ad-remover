@@ -10,8 +10,8 @@ const check = (name, pass) => results.push([name, pass]);
 const tick = () => new Promise((r) => setTimeout(r, 20));
 
 /** Boot a document with the content script loaded, as the extension would. */
-function load(html, { readyState } = {}) {
-  const dom = new JSDOM(html, { runScripts: 'outside-only' });
+function load(html, { readyState, url } = {}) {
+  const dom = new JSDOM(html, { runScripts: 'outside-only', ...(url ? { url } : {}) });
   if (readyState) {
     Object.defineProperty(dom.window.document, 'readyState', { value: readyState, configurable: true });
   }
@@ -154,6 +154,33 @@ for (const [site, markup] of Object.entries(SAMPLES)) {
   const dom = load('<!doctype html><body><div class="ad-settings">Ad settings</div>');
   await tick();
   check('ad-settings control stays visible', !isHidden(dom.window.document.querySelector('.ad-settings')));
+}
+
+// --- per-site extras apply only on their own host ---------------------------
+{
+  const MARKUP =
+    '<!doctype html><body><section class="c-section-about">' +
+    '<div class="c-section-about__background"></div>' +
+    '<div class="c-section-about__overlay"></div>' +
+    '<div class="c-section-about__container">The Gold Standard in Critical Analysis</div>' +
+    '</section>';
+
+  const mc = load(MARKUP, { url: 'https://www.metacritic.com/' });
+  await tick();
+  const mcDoc = mc.window.document;
+  check('metacritic: about-section overlay hidden', isHidden(mcDoc.querySelector('.c-section-about__overlay')));
+  check('metacritic: the section itself stays visible', !isHidden(mcDoc.querySelector('.c-section-about')));
+  check(
+    'metacritic: section content stays visible',
+    !isHidden(mcDoc.querySelector('.c-section-about__container'))
+  );
+
+  const gs = load(MARKUP, { url: 'https://www.gamespot.com/' });
+  await tick();
+  check(
+    'other hosts: the same overlay is left alone',
+    !isHidden(gs.window.document.querySelector('.c-section-about__overlay'))
+  );
 }
 
 // --- disabling restores the page live, since nothing was ever detached -------

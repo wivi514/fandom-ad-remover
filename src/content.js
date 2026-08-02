@@ -19,7 +19,9 @@
 (() => {
   'use strict';
 
-  const { selectors: AD_SELECTORS, css: AD_CSS } = globalThis.FAR_RULES;
+  const host = location.hostname.replace(/^www\./, '');
+  const AD_SELECTORS = globalThis.FAR_RULES.selectorsFor(host);
+  const AD_CSS = globalThis.FAR_RULES.cssFor(host);
   const SELECTOR = buildSelector();
   const MAX_CLIMB = 4;
 
@@ -190,8 +192,6 @@
     enabled = true;
     start();
   }
-
-  const host = location.hostname.replace(/^www\./, '');
 
   start();
 
