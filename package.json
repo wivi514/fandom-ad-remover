@@ -1,0 +1,12 @@
+{
+  "name": "fandom-ad-remover",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chromium extension that deletes leftover ad containers so blocked ads don't leave empty white boxes.",
+  "scripts": {
+    "test": "node test/removal.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

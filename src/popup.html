@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fandom Ad Remover</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Fandom Ad Remover</h1>
+      <p id="host">—</p>
+    </header>
+
+    <p id="count" class="count">0 slots removed</p>
+
+    <label class="row">
+      <input type="checkbox" id="site" />
+      <span>Active on this site</span>
+    </label>
+
+    <label class="row">
+      <input type="checkbox" id="global" />
+      <span>Extension enabled</span>
+    </label>
+
+    <p id="hint" class="hint" hidden>Reload the page to bring the ad slots back.</p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
