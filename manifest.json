@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Fandom Ad Remover",
   "version": "1.0.0",
-  "description": "Deletes leftover ad containers (fandom-ad and friends) so blocked ads don't leave empty white boxes behind.",
+  "description": "Collapses leftover ad containers (fandom-ad and friends) so blocked ads don't leave empty white boxes behind.",
   "permissions": ["storage", "activeTab"],
   "content_scripts": [
     {

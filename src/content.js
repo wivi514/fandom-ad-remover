@@ -1,13 +1,19 @@
 /**
  * Fandom Ad Remover — content script (runs at document_start, in every frame).
  *
+ * It *hides* ad slots rather than deleting them. That distinction matters:
+ * Metacritic's header script keeps a reference to its leaderboard container,
+ * and deleting that node makes it give up before rendering the desktop nav
+ * bar, so the whole logo/search/menu strip disappears. Hiding leaves the node
+ * in place for the site's own code while still collapsing the layout box, so
+ * no empty white gap remains. Verified against the live site both ways.
+ *
  * Two layers:
- *   1. A <style> injected synchronously before the page has any body, so an ad
+ *   1. A <style> injected synchronously before the page has any body, so a
  *      slot never paints even for one frame.
- *   2. A MutationObserver that deletes the slot elements outright, climbing up
- *      through wrapper divs that exist only to reserve height for that slot.
- *      This is what actually kills the empty white box — CSS alone leaves the
- *      wrapper's own min-height/padding behind.
+ *   2. A MutationObserver that marks slots as they appear, then walks up to
+ *      hide wrappers left holding nothing but a hidden slot — that wrapper is
+ *      usually where the reserved min-height lives.
  */
 
 (() => {
@@ -17,18 +23,24 @@
   const SELECTOR = buildSelector();
   const MAX_CLIMB = 4;
 
+  /** Marks what we hid, so it can all be undone and counted. */
+  const HIDDEN_ATTR = 'data-far-hidden';
+
   /**
    * Only ever collapse anonymous layout boxes. Sites put ad slots inside real
    * landmarks — Metacritic's top leaderboard is the first child of <header>,
-   * with the nav after it — and deleting one of those takes the page with it.
+   * with the nav after it — and hiding one of those takes the page with it.
    */
   const CLIMBABLE = new Set(['DIV', 'SPAN']);
+
+  /** Nodes that never count as visible content when judging a wrapper. */
+  const NOT_CONTENT = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'LINK', 'META']);
 
   /** Parents awaiting collapse until the parser stops feeding them children. */
   const pendingParents = new Set();
 
   let enabled = true;
-  let removedCount = 0;
+  let hiddenCount = 0;
   let styleEl = null;
   let observer = null;
 
@@ -51,28 +63,46 @@
   function injectStyle() {
     if (styleEl && styleEl.isConnected) return;
     styleEl = document.createElement('style');
-    styleEl.textContent = AD_CSS;
+    styleEl.textContent = `${AD_CSS}\n[${HIDDEN_ATTR}] {\n  display: none !important;\n}\n`;
     (document.head || document.documentElement).appendChild(styleEl);
   }
 
-  function remove(el) {
+  function isHidden(el) {
+    return el.hasAttribute(HIDDEN_ATTR) || (SELECTOR && el.matches(SELECTOR));
+  }
+
+  /** True when everything left in `node` is either hidden by us or ignorable. */
+  function isVisuallyEmpty(node) {
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (child.data.trim() !== '') return false;
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        if (NOT_CONTENT.has(child.tagName)) continue;
+        if (!isHidden(child)) return false;
+      }
+    }
+    return true;
+  }
+
+  function hide(el) {
+    if (el.hasAttribute(HIDDEN_ATTR)) return;
+    el.setAttribute(HIDDEN_ATTR, '');
+    hiddenCount++;
+
     const parent = el.parentElement;
-    el.remove();
-    removedCount++;
     if (!parent) return;
 
     // Mid-parse, a parent that looks empty may simply not have received its
-    // real children yet. Deleting it now detaches it from the document while
-    // the parser keeps appending into it, so everything that followed the ad
-    // in the source silently disappears. Wait until the document is complete.
+    // real children yet — hiding it would take everything that follows the ad
+    // in the source with it. Wait until the document is complete.
     if (document.readyState === 'loading') pendingParents.add(parent);
     else collapseBareAncestors(parent);
   }
 
   /**
-   * Walk up from a removed slot deleting wrappers that are now completely
-   * empty — that's where the reserved min-height lives, and it's what leaves
-   * the white box behind if we only remove the slot itself.
+   * Walk up from a hidden slot, hiding wrappers that now hold nothing visible.
+   * That wrapper is where the reserved min-height usually lives, and it's what
+   * leaves the white box behind if only the slot itself is hidden.
    */
   function collapseBareAncestors(start) {
     let node = start;
@@ -80,12 +110,14 @@
     for (let i = 0; i < MAX_CLIMB; i++) {
       if (!node || !node.isConnected) return;
       if (!CLIMBABLE.has(node.tagName)) return;
-      if (node.children.length > 0 || node.textContent.trim() !== '') return;
 
       const parent = node.parentElement;
       if (!parent || parent === document.body || parent === document.documentElement) return;
 
-      node.remove();
+      if (!node.hasAttribute(HIDDEN_ATTR)) {
+        if (!isVisuallyEmpty(node)) return;
+        node.setAttribute(HIDDEN_ATTR, '');
+      }
       node = parent;
     }
   }
@@ -100,13 +132,10 @@
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
 
     if (node.matches(SELECTOR)) {
-      remove(node);
+      hide(node);
       return;
     }
-    for (const hit of node.querySelectorAll(SELECTOR)) {
-      // An earlier removal in this batch may have taken this one with it.
-      if (hit.isConnected) remove(hit);
-    }
+    for (const hit of node.querySelectorAll(SELECTOR)) hide(hit);
   }
 
   function start() {
@@ -128,7 +157,8 @@
       subtree: true,
       attributes: true,
       // Slots are frequently blank at insert time and only get their class or
-      // id once the ad script initialises them.
+      // id once the ad script initialises them. HIDDEN_ATTR is deliberately
+      // not in this list, so our own marking doesn't re-trigger the observer.
       attributeFilter: ['class', 'id'],
     });
 
@@ -139,9 +169,11 @@
     sweep(document.documentElement);
   }
 
+  /** Fully reversible, because nothing was ever detached. */
   function stop() {
     enabled = false;
     pendingParents.clear();
+
     if (observer) {
       observer.disconnect();
       observer = null;
@@ -150,6 +182,8 @@
       styleEl.remove();
       styleEl = null;
     }
+    for (const el of document.querySelectorAll(`[${HIDDEN_ATTR}]`)) el.removeAttribute(HIDDEN_ATTR);
+    hiddenCount = 0;
   }
 
   function resume() {
@@ -172,7 +206,7 @@
     if (!msg || typeof msg.type !== 'string') return;
 
     if (msg.type === 'far:stats') {
-      sendResponse({ host, enabled, removed: removedCount });
+      sendResponse({ host, enabled, hidden: hiddenCount });
     } else if (msg.type === 'far:setEnabled') {
       msg.value ? resume() : stop();
       sendResponse({ ok: true });

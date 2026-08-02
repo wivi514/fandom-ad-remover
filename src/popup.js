@@ -5,7 +5,6 @@ const els = {
   count: document.getElementById('count'),
   site: document.getElementById('site'),
   global: document.getElementById('global'),
-  hint: document.getElementById('hint'),
 };
 
 let host = null;
@@ -41,7 +40,7 @@ async function init() {
   const stats = tabId != null ? await ask({ type: 'far:stats' }) : null;
   els.host.textContent = host || 'no page';
   els.count.textContent = stats
-    ? `${stats.removed} slot${stats.removed === 1 ? '' : 's'} removed`
+    ? `${stats.hidden} slot${stats.hidden === 1 ? '' : 's'} hidden`
     : 'not running on this page';
 }
 
@@ -53,7 +52,6 @@ async function setSiteEnabled(on) {
 
   await chrome.storage.local.set({ disabledSites: next });
   await ask({ type: 'far:setEnabled', value: on });
-  els.hint.hidden = on;
 }
 
 async function setGlobalEnabled(on) {
@@ -65,7 +63,6 @@ async function setGlobalEnabled(on) {
     if (disabledSites.includes(host)) return; // stays off for this site
   }
   await ask({ type: 'far:setEnabled', value: on });
-  els.hint.hidden = on;
 }
 
 els.site.addEventListener('change', (e) => setSiteEnabled(e.target.checked));
