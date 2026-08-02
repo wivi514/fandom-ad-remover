@@ -17,6 +17,16 @@
   const SELECTOR = buildSelector();
   const MAX_CLIMB = 4;
 
+  /**
+   * Only ever collapse anonymous layout boxes. Sites put ad slots inside real
+   * landmarks — Metacritic's top leaderboard is the first child of <header>,
+   * with the nav after it — and deleting one of those takes the page with it.
+   */
+  const CLIMBABLE = new Set(['DIV', 'SPAN']);
+
+  /** Parents awaiting collapse until the parser stops feeding them children. */
+  const pendingParents = new Set();
+
   let enabled = true;
   let removedCount = 0;
   let styleEl = null;
@@ -45,28 +55,44 @@
     (document.head || document.documentElement).appendChild(styleEl);
   }
 
-  /**
-   * True when `parent` exists solely to hold `child` — that makes it safe to
-   * delete the parent instead, taking its reserved height with it.
-   */
-  function isBareWrapper(parent, child) {
-    if (parent.children.length !== 1 || parent.children[0] !== child) return false;
-    return parent.textContent.trim() === '';
+  function remove(el) {
+    const parent = el.parentElement;
+    el.remove();
+    removedCount++;
+    if (!parent) return;
+
+    // Mid-parse, a parent that looks empty may simply not have received its
+    // real children yet. Deleting it now detaches it from the document while
+    // the parser keeps appending into it, so everything that followed the ad
+    // in the source silently disappears. Wait until the document is complete.
+    if (document.readyState === 'loading') pendingParents.add(parent);
+    else collapseBareAncestors(parent);
   }
 
-  function remove(el) {
-    let target = el;
-    let parent = target.parentElement;
+  /**
+   * Walk up from a removed slot deleting wrappers that are now completely
+   * empty — that's where the reserved min-height lives, and it's what leaves
+   * the white box behind if we only remove the slot itself.
+   */
+  function collapseBareAncestors(start) {
+    let node = start;
 
     for (let i = 0; i < MAX_CLIMB; i++) {
-      if (!parent || parent === document.body || parent === document.documentElement) break;
-      if (!isBareWrapper(parent, target)) break;
-      target = parent;
-      parent = target.parentElement;
-    }
+      if (!node || !node.isConnected) return;
+      if (!CLIMBABLE.has(node.tagName)) return;
+      if (node.children.length > 0 || node.textContent.trim() !== '') return;
 
-    target.remove();
-    removedCount++;
+      const parent = node.parentElement;
+      if (!parent || parent === document.body || parent === document.documentElement) return;
+
+      node.remove();
+      node = parent;
+    }
+  }
+
+  function flushPendingCollapses() {
+    for (const parent of pendingParents) collapseBareAncestors(parent);
+    pendingParents.clear();
   }
 
   function sweep(node) {
@@ -106,12 +132,16 @@
       attributeFilter: ['class', 'id'],
     });
 
-    document.addEventListener('DOMContentLoaded', () => sweep(document.documentElement));
+    document.addEventListener('DOMContentLoaded', () => {
+      sweep(document.documentElement);
+      flushPendingCollapses();
+    });
     sweep(document.documentElement);
   }
 
   function stop() {
     enabled = false;
+    pendingParents.clear();
     if (observer) {
       observer.disconnect();
       observer = null;

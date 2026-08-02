@@ -97,6 +97,62 @@ await new Promise((r) => setTimeout(r, 20));
 check('disabled site: style withdrawn', !dom2.window.document.querySelector('style'));
 check('disabled site: new slots untouched', !!dom2.window.document.querySelector('#after-disable'));
 
+// --- regression: Metacritic puts its top leaderboard inside <header>, before
+// --- the nav. Mid-parse that header looks like a bare ad wrapper.
+{
+  const d = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only' });
+  const doc = d.window.document;
+  // jsdom finishes parsing before we get the handle; document_start is 'loading'.
+  Object.defineProperty(doc, 'readyState', { value: 'loading', configurable: true });
+  d.window.chrome = {
+    storage: { local: { get: (defaults, cb) => cb(defaults) } },
+    runtime: { lastError: null, onMessage: { addListener: () => {} } },
+  };
+  d.window.eval(rules);
+  d.window.eval(content);
+
+  // parser emits the page in document order: wrapper, header, ad, then nav
+  const isolate = doc.createElement('div');
+  isolate.className = 'isolate';
+  doc.body.appendChild(isolate);
+  const header = doc.createElement('header');
+  header.className = 'c-site-header';
+  isolate.appendChild(header);
+  const adWrap = doc.createElement('div');
+  adWrap.className = 'fandom-ad-sticky-container fandom-ad-placeholder';
+  header.appendChild(adWrap);
+
+  await new Promise((r) => setTimeout(r, 20));
+  check('mid-parse: <header> survives a bare-looking ad child', header.isConnected);
+  check('mid-parse: page wrapper survives', isolate.isConnected);
+  check('mid-parse: the ad itself is still removed', !adWrap.isConnected);
+
+  const nav = doc.createElement('nav');
+  nav.innerHTML = '<a href="/games">Games</a><a href="/movies">Movies</a>';
+  header.appendChild(nav);
+  Object.defineProperty(doc, 'readyState', { value: 'interactive', configurable: true });
+  doc.dispatchEvent(new d.window.Event('DOMContentLoaded'));
+  await new Promise((r) => setTimeout(r, 20));
+
+  check('nav that streams in after the ad is reachable', doc.querySelectorAll('header nav a').length === 2);
+}
+
+// A landmark element is never collapsed even when it really is empty
+{
+  const d = new JSDOM('<!doctype html><body><header><div class="fandom-ad"></div></header><p>x</p>', {
+    runScripts: 'outside-only',
+  });
+  d.window.chrome = {
+    storage: { local: { get: (defaults, cb) => cb(defaults) } },
+    runtime: { lastError: null, onMessage: { addListener: () => {} } },
+  };
+  d.window.eval(rules);
+  d.window.eval(content);
+  await new Promise((r) => setTimeout(r, 20));
+  check('post-load: <header> is not climbed through', !!d.window.document.querySelector('header'));
+  check('post-load: its ad child is gone', !d.window.document.querySelector('.fandom-ad'));
+}
+
 // --- markup copied verbatim from the live sites (see README site list) -------
 const SAMPLES = {
   'gamespot.com': '<div class="js-ad-wrap ad-wrap ad-wrap--top"><div class="fandom-ad" id="t"></div></div>',

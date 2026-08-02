@@ -26,9 +26,20 @@ the extension card after editing files.
    frame (no flash of empty box).
 2. Runs a `MutationObserver` that removes matching elements as they appear —
    including slots that start blank and only get their class once the ad script
-   initialises. Before deleting, it climbs up to 4 levels through parents that
-   contain *nothing but* the ad slot, because that outer wrapper is usually the
+   initialises. After removing a slot it walks up to 4 levels deleting wrappers
+   that are now completely empty, because that outer wrapper is usually the
    thing holding the `min-height` that makes the white gap.
+
+Two guards on that upward walk, both learned the hard way on Metacritic, whose
+top leaderboard is the *first child of `<header>`* with the nav after it:
+
+- **Only `<div>` and `<span>` are ever collapsed.** Landmarks like `<header>`,
+  `<nav>` and `<main>` are left alone however empty they look.
+- **Nothing is collapsed while `document.readyState === 'loading'`.** Mid-parse,
+  a parent that looks empty may just not have received its real children yet;
+  removing it detaches it while the parser keeps appending into it, so
+  everything after the ad in the source silently vanishes. Collapses are queued
+  and flushed at `DOMContentLoaded`. The slot itself still goes immediately.
 
 ## Toolbar popup
 
