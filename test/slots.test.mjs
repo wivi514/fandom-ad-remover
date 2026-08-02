@@ -156,6 +156,27 @@ for (const [site, markup] of Object.entries(SAMPLES)) {
   check('ad-settings control stays visible', !isHidden(dom.window.document.querySelector('.ad-settings')));
 }
 
+// --- Blockthrough anti-adblock softwall (markup captured on GameSpot) -------
+{
+  const dom = load(
+    '<!doctype html><body><main><h1>GameSpot</h1></main>' +
+      '<div id="bt-softwall" class="bt-softwall">' +
+      '<div class="bt-sw-container" style="font-family: kanit, sans-serif;"></div></div>',
+    { url: 'https://www.gamespot.com/' }
+  );
+  await tick();
+  const doc = dom.window.document;
+  check('softwall nag hidden', isHidden(doc.querySelector('#bt-softwall')));
+  check('page content behind it untouched', !isHidden(doc.querySelector('main')));
+
+  // same vendor widget, different Fandom site
+  const mc = load('<!doctype html><body><div id="bt-softwall" class="bt-softwall"></div>', {
+    url: 'https://www.metacritic.com/',
+  });
+  await tick();
+  check('softwall hidden on other Fandom sites too', isHidden(mc.window.document.querySelector('#bt-softwall')));
+}
+
 // --- per-site extras apply only on their own host ---------------------------
 {
   const MARKUP =

@@ -6,6 +6,10 @@ Chromium browser. It collapses the containers ad blockers leave behind — the
 Fandom wikis, GameFAQs and Metacritic don't show empty white boxes where the
 ads used to be.
 
+It also hides the dismissible "We noticed you're using an ad blocker" softwall
+that the Fandom network shows over the page (Blockthrough's `#bt-softwall`,
+whose own element supplies the dim backdrop).
+
 It does **not** block ads. Keep using uBlock Origin / Brave Shields for that;
 this just cleans up the holes.
 

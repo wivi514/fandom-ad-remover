@@ -46,6 +46,14 @@ const AD_SELECTORS = [
   '[id*="incontent_boxad" i]',
   '[id*="incontent_player" i]',
 
+  // --- Anti-adblock nag walls -----------------------------------------------
+  // Blockthrough's "softwall" — the dismissible "We noticed you're using an ad
+  // blocker" panel on the Fandom network, whose own element provides the dim
+  // backdrop as well as the panel. The ids are vendor-specific, so matching
+  // them anywhere is safe.
+  '#bt-softwall',
+  '.bt-softwall',
+
   // --- Ad tech containers / iframes -----------------------------------------
   '[id^="div-gpt-ad"]',
   '[id^="gpt-ad"]',
